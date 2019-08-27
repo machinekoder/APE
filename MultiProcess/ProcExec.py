@@ -20,7 +20,15 @@ class ProcExec:
         self.loopBlocks = {}
         # creates an executor
         self.executor = Core.Executor(self.node)
+        # Dictionary of all instances of Procedures and their associated requirements
+        # {'device/procedure':{
+        #     'proc': <Instance>,
+        #     'procedure': <name of procedure>,
+        #     'requirements': {
+        #         'req1': <value>} }}
         self.procedures = {}
+        # List of the procedures in the order they are to be done
+        # ['device/procedure', 'device/procedure']
         self.proclist = []
         # Create an interface for the apparatus and assign it to the executor
         self.apparatus = APE_Interfaces.ApparatusInterface(self.node)
@@ -42,45 +50,59 @@ class ProcExec:
     def connect2G(self, PE2G_address):
         self.node.connect('gui', PE2G_address, server=True)
 
-    def _create_procedure(self, device, procedure, requirements):
+    def _create_procedure(self, device, procedure):
+        # Handle 'normal' procedures
         if device == '':
             raw_proc = getattr(Procedures, procedure, None)
             if raw_proc is None:
                 raw_proc = getattr(Project_Procedures, procedure)
-            raw_proc = raw_proc(self.apparatus, self.executor)
-            if not requirements:
-
-                def proc(_):
-                    raw_proc.Do()
-
-            else:
-
-                def proc(reqs):
-                    raw_proc.Do(reqs)
-
+            proc = raw_proc(self.apparatus, self.executor)
+        # Handle device procedures
         else:
+            dev_address = self.apparatus.getValue(['devices', device, 'address'])
 
-            def proc(reqs):
-                self.apparatus.DoEproc(device, procedure, reqs)
+            class DevProc(Core.Procedure):
+                def Prepare(self):
+                    self.name = procedure
+                    self.requirements = self.executor.getRequirements(
+                        device, procedure, dev_address
+                    )
+
+                def Do(self, values=None):
+                    if values is None:
+                        values = {}
+                    self.GetRequirements(values)
+                    # self.CheckRequirements()
+                    details = {}
+                    for req in self.requirements:
+                        details[req] = self.requirements['value']
+                    self.DoEproc(device, procedure, details)
+
+            proc = DevProc(self.apparatus, self.executor)
 
         return proc
 
     def _resolve_value(self, value, eproc):
+        print('resolving')
         # reference syntax
         if value.startswith('@'):
-            real_value = self.apparatus.getValue(value[1:].split('/'))
-            return real_value
+            return self.apparatus.getValue(value[1:].split('/'))
 
         # procedure syntax
         elif value.startswith('!') and not eproc:
+            print(value)
+            print(str(self.procedures.keys()))
             try:
-                real_value = getattr(Project_Procedures, value[1:])(
-                    self.apparatus, self.executor
-                )
+                for proc in self.procedures:
+                    print(
+                        value[1:] + 'compared to ' + self.procedures[proc]['procedure']
+                    )
+                    if value[1:] == self.procedures[proc]['procedure']:
+                        print(str(type(self.procedures[proc]['proc'])))
+                        return self.procedures[proc]['proc']
             except AttributeError:
-                real_value = None
-            return real_value
-
+                pass
+            return None
         else:
             return value
 
@@ -132,9 +154,7 @@ class ProcExec:
         deep_reload(Project_Procedures)
 
         for item in self.procedures.values():
-            proc = self._create_procedure(
-                item['device'], item['procedure'], bool(item['requirements'])
-            )
+            proc = self._create_procedure(item['device'], item['procedure'])
             item['proc'] = proc
 
     def createProcedure(self, device, procedure, requirements):
@@ -144,7 +164,7 @@ class ProcExec:
         :param procedure: Name of the procedure.
         :param requirements: Procedure requirements.
         """
-        proc = self._create_procedure(device, procedure, bool(requirements))
+        proc = self._create_procedure(device, procedure)
         entry = {
             'proc': proc,
             'device': device,
@@ -173,17 +193,15 @@ class ProcExec:
         :param procedure: Name of the procedure.
         :param requirements: Procedure requirements.
         """
-        proc = self._create_procedure(device, procedure, bool(requirements))
-        reqs = self._resolve_requirements(requirements, eproc=bool(device))
-        proc(reqs)
+        proc = self._create_procedure(device, procedure)
+        proc.Do(requirements)
 
     def doProcedure(self, device, procedure):
         """
         Does a procedure from the instantiated procedures.
         """
-        proc = self.procedures[f'{device}/{procedure}']
-        reqs = self._resolve_requirements(proc['requirements'], eproc=bool(device))
-        proc['proc'](reqs)
+        item = self.procedures[f'{device}/{procedure}']
+        item['proc'].Do(item['requirements'])
 
     def doProclistItem(self, index):
         """
@@ -191,10 +209,7 @@ class ProcExec:
         """
         item = self.proclist[index]
         proc = self.procedures[f'{item["device"]}/{item["procedure"]}']
-        reqs = self._resolve_requirements(
-            item['requirements'], eproc=bool(item['device'])
-        )
-        proc['proc'](reqs)
+        proc['proc'].Do()
 
     def doProclist(self):
         """
@@ -275,6 +290,9 @@ class ProcExec:
         :param requirements: New procedure requirements.
         """
         self.proclist[index]['requirements'] = requirements
+
+        print(str(index))
+        print(str(requirements))
 
     def removeProclistItem(self, index):
         """
