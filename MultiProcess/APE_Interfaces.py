@@ -72,9 +72,7 @@ class ApparatusInterface(ApeInterface):
         )
 
     def getSimulation(self):
-        return self._send_message(
-            subject='target.apparatus.getSimulation'
-        )
+        return self._send_message(subject='target.apparatus.getSimulation')
 
     def checkAddress(self, app_address):
         return self._send_message(

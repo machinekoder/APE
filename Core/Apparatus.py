@@ -350,7 +350,9 @@ class Apparatus(dict):
             for n in range(self.proclog_depthindex):
                 procLogLine.append('->')
 
-            procLogLine.append({'name': procName, 'information': info, 'time': time.time()})
+            procLogLine.append(
+                {'name': procName, 'information': info, 'time': time.time()}
+            )
             self.proclog.append(procLogLine)
             self.UpdateLog(procLogLine)
 
@@ -359,11 +361,11 @@ class Apparatus(dict):
             json.dump([], self.ProcLogFile)
             self.PLFirstWrite = False
             eof = self.ProcLogFile.seek(0, 2)
-            self.ProcLogFile.seek(eof-1, 0)
+            self.ProcLogFile.seek(eof - 1, 0)
 
         else:
             eof = self.ProcLogFile.seek(0, 2)
-            self.ProcLogFile.seek(eof-1, 0)
+            self.ProcLogFile.seek(eof - 1, 0)
             self.ProcLogFile.write(', ')
 
         json.dump(entry, self.ProcLogFile)

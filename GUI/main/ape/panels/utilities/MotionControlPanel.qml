@@ -82,7 +82,7 @@ UtilityGroupBox {
       Repeater {
         //model: ["X", "Y", "Z", "A", "B", "C"]
         model: nodeHandler.appInterface.getValue(
-             "devices/" + deviceCombo.currentText + "/axes")
+                 "devices/" + deviceCombo.currentText + "/axes")
         ColumnLayout {
           Button {
             Layout.fillWidth: true

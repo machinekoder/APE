@@ -45,10 +45,9 @@ class Procedure:
         # Once set, values are held until changed
         # Handle apparatus values
         for req in self.requirements:
-            if (
-                self.requirements[req]['source'] == 'apparatus'
-                and self.requirements[req]['address'] not in ['', None]
-            ):
+            if self.requirements[req]['source'] == 'apparatus' and self.requirements[
+                req
+            ]['address'] not in ['', None]:
                 try:
                     tempvalue = self.apparatus.getValue(
                         self.requirements[req]['address']
