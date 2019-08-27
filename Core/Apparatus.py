@@ -1,3 +1,5 @@
+from io import SEEK_END, SEEK_SET
+
 import Devices
 import json
 import time
@@ -360,12 +362,11 @@ class Apparatus(dict):
         if self.PLFirstWrite:
             json.dump([], self.ProcLogFile)
             self.PLFirstWrite = False
-            eof = self.ProcLogFile.seek(0, 2)
-            self.ProcLogFile.seek(eof - 1, 0)
-
+            eof = self.ProcLogFile.seek(0, SEEK_END)
+            self.ProcLogFile.seek(eof - 1, SEEK_SET)
         else:
-            eof = self.ProcLogFile.seek(0, 2)
-            self.ProcLogFile.seek(eof - 1, 0)
+            eof = self.ProcLogFile.seek(0, SEEK_END)
+            self.ProcLogFile.seek(eof - 1, SEEK_SET)
             self.ProcLogFile.write(', ')
 
         json.dump(entry, self.ProcLogFile)
