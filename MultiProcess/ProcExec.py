@@ -3,6 +3,7 @@ import sys
 from importlib import reload
 from inspect import isclass
 from types import ModuleType
+from uuid import uuid4
 
 import Core
 import Procedures
@@ -21,14 +22,15 @@ class ProcExec:
         # creates an executor
         self.executor = Core.Executor(self.node)
         # Dictionary of all instances of Procedures and their associated requirements
-        # {'device/procedure':{
+        # {'uuid':{
         #     'proc': <Instance>,
-        #     'procedure': <name of procedure>,
-        #     'requirements': {
-        #         'req1': <value>} }}
+        #     'device': <name of device>,
+        #     'procedure': <name of procedure>}}
         self.procedures = {}
         # List of the procedures in the order they are to be done
-        # ['device/procedure', 'device/procedure']
+        # [
+        # {'uuid': <procedure instance uuid>, 'requirements': <list of requirements>},
+        # ...]
         self.proclist = []
         # Create an interface for the apparatus and assign it to the executor
         self.apparatus = APE_Interfaces.ApparatusInterface(self.node)
@@ -64,18 +66,21 @@ class ProcExec:
             class DevProc(Core.Procedure):
                 def Prepare(self):
                     self.name = procedure
-                    self.requirements = self.executor.getRequirements(
-                        device, procedure, dev_address
-                    )
+                    self.requirements = {
+                        key: {'source': 'apparatus', 'address': '', 'value': ''}
+                        for key in self.executor.getRequirements(
+                            device, procedure, dev_address
+                        )
+                    }
 
                 def Do(self, values=None):
                     if values is None:
                         values = {}
                     self.GetRequirements(values)
                     # self.CheckRequirements()
-                    details = {}
-                    for req in self.requirements:
-                        details[req] = self.requirements['value']
+                    details = {
+                        req: item['value'] for req, item in self.requirements.items()
+                    }
                     self.DoEproc(device, procedure, details)
 
             proc = DevProc(self.apparatus, self.executor)
@@ -93,13 +98,11 @@ class ProcExec:
             print(value)
             print(str(self.procedures.keys()))
             try:
-                for proc in self.procedures:
-                    print(
-                        value[1:] + 'compared to ' + self.procedures[proc]['procedure']
-                    )
-                    if value[1:] == self.procedures[proc]['procedure']:
-                        print(str(type(self.procedures[proc]['proc'])))
-                        return self.procedures[proc]['proc']
+                for proc in self.procedures.items():
+                    print(value[1:] + 'compared to ' + proc['procedure'])
+                    if value[1:] == proc['procedure']:
+                        print(str(type(proc['proc'])))
+                        return proc['proc']
             except AttributeError:
                 pass
             return None
@@ -119,12 +122,8 @@ class ProcExec:
         Returns all instantiated procedures.
         """
         return [
-            {
-                'device': proc['device'],
-                'procedure': proc['procedure'],
-                'requirements': proc['requirements'],
-            }
-            for proc in self.procedures.values()
+            {'device': proc['device'], 'procedure': proc['procedure'], 'uuid': uuid}
+            for uuid, proc in self.procedures.items()
         ]
 
     def clearProcedures(self):
@@ -157,34 +156,30 @@ class ProcExec:
             proc = self._create_procedure(item['device'], item['procedure'])
             item['proc'] = proc
 
-    def createProcedure(self, device, procedure, requirements):
+    def createProcedure(self, device, procedure, uuid=None):
         """
         Instantiates a new procedure.
         :param device: Name of the device.
         :param procedure: Name of the procedure.
-        :param requirements: Procedure requirements.
+        :param uuid: Optional uuid for the procedure instance.
         """
         proc = self._create_procedure(device, procedure)
-        entry = {
-            'proc': proc,
-            'device': device,
-            'procedure': procedure,
-            'requirements': requirements,
-        }
-        self.procedures[f'{device}/{procedure}'] = entry
+        entry = {'proc': proc, 'device': device, 'procedure': procedure}
+        if not uuid:
+            uuid = str(uuid4())
+        self.procedures[uuid] = entry
+        return uuid
 
-    def removeProcedure(self, device, procedure):
+    def removeProcedure(self, uuid):
         """
         Deletes an instantiated procedure and all it's users.
-        :param device: Name of the device.
-        :param procedure: Name of the procedure.
+        :param uuid: Uuid of the instantiated procedure.
         """
-        for item in self.proclist:
-            if item['device'] == device and item['procedure'] == procedure:
-                self.proclist.remove(item)
-        ref = f'{device}/{procedure}'
-        if ref in self.procedures:
-            del self.procedures[ref]
+        for i, item in reversed(list(enumerate(self.proclist))):
+            if item['uuid'] == uuid:
+                self.proclist.pop(i)
+        if uuid in self.procedures:
+            del self.procedures[uuid]
 
     def do(self, device, procedure, requirements):
         """
@@ -194,22 +189,25 @@ class ProcExec:
         :param requirements: Procedure requirements.
         """
         proc = self._create_procedure(device, procedure)
-        proc.Do(requirements)
+        reqs = self._resolve_requirements(requirements, device)
+        proc.Do(reqs)
 
-    def doProcedure(self, device, procedure):
+    def doProcedure(self, uuid, requirements):
         """
         Does a procedure from the instantiated procedures.
         """
-        item = self.procedures[f'{device}/{procedure}']
-        item['proc'].Do(item['requirements'])
+        item = self.procedures[uuid]
+        reqs = self._resolve_requirements(requirements, item['device'])
+        item['proc'].Do(reqs)
 
     def doProclistItem(self, index):
         """
         Does a procedure already in the procedure list.
         """
         item = self.proclist[index]
-        proc = self.procedures[f'{item["device"]}/{item["procedure"]}']
-        proc['proc'].Do()
+        proc = self.procedures[item['uuid']]
+        reqs = self._resolve_requirements(item['requirements'], proc['device'])
+        proc['proc'].Do(reqs)
 
     def doProclist(self):
         """
@@ -224,8 +222,9 @@ class ProcExec:
         """
         return [
             {
-                'device': proc['device'],
-                'procedure': proc['procedure'],
+                'device': self.procedures[proc['uuid']]['device'],
+                'procedure': self.procedures[proc['uuid']]['procedure'],
+                'uuid': proc['uuid'],
                 'requirements': proc['requirements'],
             }
             for proc in self.proclist
@@ -257,25 +256,20 @@ class ProcExec:
         del self.proclist[:]
         self.procedures.clear()
         for item in data['procedures']:
-            self.createProcedure(
-                item['device'], item['procedure'], item['requirements']
-            )
+            self.createProcedure(item['device'], item['procedure'], item['uuid'])
         for item in data['proclist']:
-            self.insertProclistItem(
-                -1, item['device'], item['procedure'], item['requirements']
-            )
+            self.insertProclistItem(-1, item['uuid'], item['requirements'])
 
-    def insertProclistItem(self, index, device, procedure, requirements):
+    def insertProclistItem(self, index, uuid, requirements):
         """
         Inserts a new procedure into the proclist
         :param index: Append if -1 else insert into list.
-        :param device: Name of the device.
-        :param procedure: Name of the procedure.
+        :param uuid: Uuid of the instantiated procedure.
         :param requirements: Procedure requirements.
         """
-        if f'{device}/{procedure}' not in self.procedures:
-            raise KeyError("Procedure not found")
-        entry = {'device': device, 'procedure': procedure, 'requirements': requirements}
+        if uuid not in self.procedures:
+            raise KeyError(f"Procedure instance {uuid} not found")
+        entry = {'uuid': uuid, 'requirements': requirements}
         if index == -1:
             self.proclist.append(entry)
         elif index < len(self.proclist):
@@ -290,9 +284,6 @@ class ProcExec:
         :param requirements: New procedure requirements.
         """
         self.proclist[index]['requirements'] = requirements
-
-        print(str(index))
-        print(str(requirements))
 
     def removeProclistItem(self, index):
         """
