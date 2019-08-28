@@ -160,7 +160,7 @@ class Executor(ApeInterface):
             return list(self.devicelist[device]['Address'].requirements[eproc])
         else:
             return self._send_message(
-                subject='target.getRequirements',
+                subject='target.executor.getRequirements',
                 args=[device, eproc, address],
                 target=address,
             )
