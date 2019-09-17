@@ -250,6 +250,9 @@ class ExecutorInterface(ApeInterface):
             subject='target.createProcedure', args=[device, procedure], reply=True
         )
 
+    def updateProcedure(self, uuid, requirements):
+        self._send_message(subject='target.updateProcedure', args=[uuid, requirements])
+
     def removeProcedure(self, uuid):
         self._send_message(subject='target.removeProcedure', args=[uuid])
 

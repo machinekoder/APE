@@ -25,7 +25,9 @@ class ProcExec:
         # {'uuid':{
         #     'proc': <Instance>,
         #     'device': <name of device>,
-        #     'procedure': <name of procedure>}}
+        #     'procedure': <name of procedure>,
+        #     'requirements': <list of requirements>
+        #     }}
         self.procedures = {}
         # List of the procedures in the order they are to be done
         # [
@@ -122,7 +124,7 @@ class ProcExec:
         Returns all instantiated procedures.
         """
         return [
-            {'device': proc['device'], 'procedure': proc['procedure'], 'uuid': uuid}
+            dict({k: v for k, v in proc.items() if k != 'proc'}, uuid=uuid)
             for uuid, proc in self.procedures.items()
         ]
 
@@ -164,11 +166,25 @@ class ProcExec:
         :param uuid: Optional uuid for the procedure instance.
         """
         proc = self._create_procedure(device, procedure)
-        entry = {'proc': proc, 'device': device, 'procedure': procedure}
+        entry = {
+            'proc': proc,
+            'device': device,
+            'procedure': procedure,
+            'requirements': {},
+        }
         if not uuid:
             uuid = str(uuid4())
         self.procedures[uuid] = entry
         return uuid
+
+    def updateProcedure(self, uuid, requirements):
+        """
+        Updates a procedure with new requirements.
+        :param uuid: Uuid of the instantiated proecedure.
+        :param requirements: Screen.virtualX
+        """
+        if uuid in self.procedures:
+            self.procedures[uuid]['requirements'] = requirements
 
     def removeProcedure(self, uuid):
         """
@@ -197,7 +213,9 @@ class ProcExec:
         Does a procedure from the instantiated procedures.
         """
         item = self.procedures[uuid]
-        reqs = self._resolve_requirements(requirements, item['device'])
+        raw_reqs = item['requirements']
+        raw_reqs.update(requirements)
+        reqs = self._resolve_requirements(raw_reqs, item['device'])
         item['proc'].Do(reqs)
 
     def doProclistItem(self, index):
@@ -205,9 +223,7 @@ class ProcExec:
         Does a procedure already in the procedure list.
         """
         item = self.proclist[index]
-        proc = self.procedures[item['uuid']]
-        reqs = self._resolve_requirements(item['requirements'], proc['device'])
-        proc['proc'].Do(reqs)
+        self.doProcedure(uuid=item['uuid'], requirements=item['requirements'])
 
     def doProclist(self):
         """
