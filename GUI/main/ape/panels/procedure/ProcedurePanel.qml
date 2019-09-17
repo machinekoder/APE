@@ -128,12 +128,18 @@ Item {
 
             model: (proclistTableView.currentRow
                     > -1) ? getModel(
-                              proclistTableView.model[proclistTableView.currentRow]) : []
+                              proclistTableView.model[proclistTableView.currentRow],
+                              true) : []
 
-            function getModel(base) {
+            function getModel(base, inst) {
               // extend requirements with additional default requirements
-              var reqs = nodeHandler.procInterface.getRequirements(
-                    base["device"], base["procedure"])
+              if (inst) {
+                var reqs = nodeHandler.procInterface.getRequirements(
+                      base["device"], base["procedure"], base["uuid"])
+              } else {
+                var reqs = nodeHandler.procInterface.getRequirements(
+                      base["device"], base["procedure"])
+              }
               var base_reqs = base["requirements"]
               for (var i = 0; i < base_reqs.length; ++i) {
                 var found = false
@@ -160,11 +166,19 @@ Item {
                      && (instancesTableView.model.length > 0)
 
             onValueUpdate: {
-              var newModel = JSON.parse(JSON.stringify(model))
-              newModel[row]["value"] = value
-              newModel[row]["modified"] = true
-              model = newModel
+              var tableRow = instancesTableView.currentRow
+              var reqs = instReqTableView.model
+              reqs[row]["value"] = value
+              nodeHandler.procInterface.updateProcedure(
+                    instancesTableView.selectedUuid, reqs)
+              nodeHandler.procInterface.refreshProcedures()
+              instancesTableView.selectRow(tableRow)
             }
+
+            model: (instancesTableView.currentRow
+                    > -1) ? reqTableView.getModel(
+                              instancesTableView.model[instancesTableView.currentRow],
+                              false) : []
           }
         }
       }
@@ -194,11 +208,6 @@ Item {
               if (currentRow > -1) {
                 treeView.clearSelection()
                 proclistTableView.clearSelection()
-                var device = model[currentRow]['device']
-                var proc = model[currentRow]['procedure']
-                var reqs = nodeHandler.procInterface.getRequirements(device,
-                                                                     proc)
-                instReqTableView.model = reqs
               }
             }
           }
