@@ -33,6 +33,7 @@ class Apparatus(dict):
         self.simulation = simulation
         ProcLogFileName = self.logpath + self.AppID + 'proclog.json'
         self.ProcLogFile = open(ProcLogFileName, mode='w')
+        self.PLFirstWrite = True
 
         for device in self['devices']:
             self['devices'][device]['Connected'] = False
