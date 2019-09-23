@@ -272,7 +272,8 @@ class ProcExec:
         del self.proclist[:]
         self.procedures.clear()
         for item in data['procedures']:
-            self.createProcedure(item['device'], item['procedure'], item['uuid'])
+            uuid = self.createProcedure(item['device'], item['procedure'], item['uuid'])
+            self.updateProcedure(uuid, item['requirements'])
         for item in data['proclist']:
             self.insertProclistItem(-1, item['uuid'], item['requirements'])
 
