@@ -260,13 +260,15 @@ class ExecutorInterface(ApeInterface):
         self._send_message(subject='target.do', args=[device, procedure, requirements])
 
     def doProcedure(self, uuid, requirements):
-        self._send_message(subject='target.doProcedure', args=[uuid, requirements])
+        self._send_message(
+            subject='target.doProcedure', reply=False, args=[uuid, requirements]
+        )
 
     def doProclistItem(self, index):
-        self._send_message(subject='target.doProclistItem', args=[index])
+        self._send_message(subject='target.doProclistItem', reply=False, args=[index])
 
     def doProclist(self):
-        self._send_message(subject='target.doProclist')
+        self._send_message(subject='target.doProclist', reply=False)
 
     def getProclist(self):
         return self._send_message(subject='target.getProclist', reply=True)
